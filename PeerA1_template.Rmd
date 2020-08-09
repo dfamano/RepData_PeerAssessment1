@@ -1,0 +1,127 @@
+---
+title: "Reproducible Reseearch - Project 1"
+author: "Daniel Famano"
+date: "8/9/2020"
+output: html_document
+---
+
+### First Assignment (week 2) of the Reproducible Research Course
+
+First, let's download the data if it's not already in the WD:
+
+```{r download, echo=TRUE}
+# Checking if folder already exists in wd. If not, downloads and unzip
+if (!file.exists("activity.csv")) { 
+        download.file('https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip', destfile = 'Course5Assignment.zip', method="curl")
+        unzip('Course5Assignment.zip')
+}
+```
+
+And now load the data and assign it to activity, and take a look at the format of the data
+
+```{r read, echo=TRUE}
+activity <- read.csv("activity.csv", header = TRUE)
+str(activity)
+```
+
+It seems that the dates are not correctly formated. So let's correct that...
+```{r formatdate, echo=TRUE}
+library(lubridate)
+activity$date <- ymd(as.character(activity$date))
+str(activity)
+```
+
+Now that we formated the date variable correctly, let's begin answering the questions one by one:
+
+## What is mean total number of steps taken per day?
+
+- Make a histogram of the total number of steps taken each day
+
+```{r histogram, echo=TRUE}
+totalsteps <- aggregate(steps ~ date, data = activity, FUN = sum)
+hist(totalsteps$steps, breaks = 8, xlab = "number of steps", main = "Histogram of Total Steps")
+```
+
+- Calculate and report the mean and median total number of steps taken per day
+
+```{r mean_median, echo=TRUE}
+print(c("The mean of total steps per day is:", mean(totalsteps$steps, na.rm = TRUE)))
+print(c("The median of total steps per day is:", median(totalsteps$steps, na.rm = TRUE)))
+```
+
+## What is the average daily activity pattern?
+
+- Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r avgsteps, echo=TRUE}
+averagesteps <- aggregate(steps ~ interval, data = activity, FUN = mean)
+plot(type = "l", averagesteps)
+```
+
+- Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r maxinterval, echo=TRUE}
+max <- which.max(averagesteps$steps)
+print(c("The interval that has the maximum number of steps is:", averagesteps[max,1]))
+```
+
+## Imputing missing values
+
+- Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+
+```{r numbernas, echo=TRUE}
+print(c("The number of NA values in the initial dataframe is",sum(is.na(activity$steps))))
+```
+
+- Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+Comment: Since we already have the values for the average steps for each interval, let's complete the NA values matching by interval and assign to a new dataframe activity_fill
+
+Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r fillna, echo=TRUE}
+activity_fill <- activity
+for(i in which(is.na(activity$steps)))
+        {
+        activity_fill[i,1] = averagesteps[which(activity_fill[i,3] == averagesteps$interval),2]
+}
+```
+
+- Make a histogram of the total number of steps taken each day and Calculate and report the **mean** and **median** total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+Comment: Now let's run the same histogram to see if there is any noticeable changes...
+
+```{r histogram_fill, echo=TRUE}
+totalsteps_fill <- aggregate(steps ~ date, data = activity_fill, FUN = sum)
+hist(totalsteps_fill$steps, breaks = 8, xlab = "number of steps", main = "Histogram of Total Steps (w/ replaced NA values)")
+```
+
+```{r mean_median_fill, echo=TRUE}
+print(c("The mean of total steps per day is:", mean(totalsteps_fill$steps, na.rm = TRUE)))
+print(c("The median of total steps per day is:", median(totalsteps_fill$steps, na.rm = TRUE)))
+```
+
+It doesn't seem that filling the missing values had a great impact in the mean or median, although we can see that it added new data to the histogram.
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+- Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r activity_week, echo=TRUE}
+library(dplyr)
+activity_week <- mutate(activity_fill, weekdays(activity_fill$date))
+colnames(activity_week)[4] <- "weekday"
+# Converts the name of the weekday to a weekday or weekend factor
+activity_week$weekday <- as.factor(ifelse(activity_week$weekday %in% c("Saturday", "Sunday"), "weekend", "weekday"))
+```
+
+- Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+```{r plot, echo=TRUE}
+averagesteps_week <- aggregate(activity_week$steps, by = list(activity_week$weekday, activity_week$interval), data = activity_week, FUN = mean)
+colnames(averagesteps_week) <- c("weekday", "interval", "steps")
+library(lattice)
+xyplot(steps~interval | weekday, type = "l", data = averagesteps_week)
+```
+
+Comment: We can see that there is a distinct pattern for weekdays and weekends which seems reasonable since people have different habits during the weekend.
